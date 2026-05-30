@@ -1,125 +1,156 @@
-"""
-Low-poly house generator (headless Blender).
+def add_house():
+    # ---- Materials (all unique, prefixed 'house_') ----
+    wall_mat   = mat("house_wall",      (0.95, 0.82, 0.18, 1.0), roughness=0.55)   # sunny yellow
+    wall_mat2  = mat("house_wall_band", (0.20, 0.78, 0.92, 1.0), roughness=0.5)    # cyan accent band
+    roof_mat   = mat("house_roof",      (0.92, 0.16, 0.36, 1.0), roughness=0.45)   # cherry red
+    door_mat   = mat("house_door",      (0.30, 0.55, 0.95, 1.0), roughness=0.4)    # bright blue
+    knob_mat   = mat("house_knob",      (1.0, 0.85, 0.10, 1.0), metallic=0.9, roughness=0.25,
+                     emission=(1.0, 0.85, 0.2, 1.0), emission_strength=0.6)
+    frame_mat  = mat("house_frame",     (0.95, 0.45, 0.10, 1.0), roughness=0.4)    # orange frames
+    glass_mat  = mat("house_glass",     (0.55, 0.85, 0.95, 1.0), metallic=0.2, roughness=0.08,
+                     emission=(0.6, 0.9, 1.0, 1.0), emission_strength=0.4)         # glassy panes
+    box_mat    = mat("house_flowerbox", (0.45, 0.30, 0.18, 1.0), roughness=0.7)    # wood box
+    leaf_mat   = mat("house_boxleaf",   (0.20, 0.70, 0.25, 1.0), roughness=0.6)    # greenery
+    chim_mat   = mat("house_chimney",   (0.78, 0.32, 0.22, 1.0), roughness=0.85)   # brick
+    chimcap_mat= mat("house_chimcap",   (0.35, 0.35, 0.40, 1.0), roughness=0.6)    # cap
 
-Run with:
-    blender --background --python house.py
-"""
+    bloom_cols = [
+        mat("house_bloom_0", (1.0, 0.25, 0.45, 1.0), emission=(1.0,0.3,0.5,1.0), emission_strength=0.5),
+        mat("house_bloom_1", (1.0, 0.55, 0.10, 1.0), emission=(1.0,0.6,0.15,1.0), emission_strength=0.5),
+        mat("house_bloom_2", (0.95, 0.85, 0.15, 1.0), emission=(1.0,0.9,0.2,1.0), emission_strength=0.5),
+        mat("house_bloom_3", (0.65, 0.30, 0.95, 1.0), emission=(0.7,0.35,1.0,1.0), emission_strength=0.5),
+        mat("house_bloom_4", (1.0, 0.40, 0.80, 1.0), emission=(1.0,0.45,0.85,1.0), emission_strength=0.5),
+    ]
 
-import bpy
-import os
-import math
+    # ---- Main wall body ----
+    bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0, 0, 1.4))
+    body = bpy.context.active_object
+    body.name = "house_body"
+    body.scale = (4.4, 3.4, 2.8)  # x[-2.2,2.2] y[-1.7,1.7] z[0,2.8]
+    body.data.materials.append(wall_mat)
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-OUT = os.path.join(HERE, "output")
-os.makedirs(OUT, exist_ok=True)
+    # ---- Color-block accent band around the walls ----
+    bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0, 0, 0.5))
+    band = bpy.context.active_object
+    band.name = "house_band"
+    band.scale = (4.46, 3.46, 0.5)
+    band.data.materials.append(wall_mat2)
 
-bpy.ops.wm.read_factory_settings(use_empty=True)
-scene = bpy.context.scene
+    # ---- Roof: 4-sided pyramid cone ----
+    bpy.ops.mesh.primitive_cone_add(vertices=4, radius1=3.3, radius2=0.0,
+                                    depth=1.6, location=(0, 0, 3.6))
+    roof = bpy.context.active_object
+    roof.name = "house_roof"
+    roof.rotation_euler = (0, 0, math.radians(45))
+    roof.scale = (1.0, 0.78, 1.0)  # match rectangular footprint
+    roof.data.materials.append(roof_mat)
 
+    # ---- Front door (faces -Y) ----
+    bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0, -1.72, 0.75))
+    door = bpy.context.active_object
+    door.name = "house_door"
+    door.scale = (0.9, 0.12, 1.5)
+    door.data.materials.append(door_mat)
 
-def mat(name, rgba, metallic=0.0, roughness=0.6):
-    m = bpy.data.materials.new(name)
-    m.use_nodes = True
-    b = m.node_tree.nodes.get("Principled BSDF")
-    b.inputs["Base Color"].default_value = rgba
-    b.inputs["Metallic"].default_value = metallic
-    b.inputs["Roughness"].default_value = roughness
-    return m
+    # door frame trim
+    bpy.ops.mesh.primitive_cube_add(size=1.0, location=(0, -1.71, 0.78))
+    dframe = bpy.context.active_object
+    dframe.name = "house_doorframe"
+    dframe.scale = (1.06, 0.1, 1.62)
+    dframe.data.materials.append(frame_mat)
 
+    # door knob
+    bpy.ops.mesh.primitive_uv_sphere_add(radius=0.08, location=(0.32, -1.8, 0.75))
+    knob = bpy.context.active_object
+    knob.name = "house_knob"
+    for p in knob.data.polygons:
+        p.use_smooth = True
+    knob.data.materials.append(knob_mat)
 
-def assign(obj, m, smooth=False):
-    obj.data.materials.clear()
-    obj.data.materials.append(m)
-    for p in obj.data.polygons:
-        p.use_smooth = smooth
+    # ---- Windows + flower boxes ----
+    # (x, y, facing) ; front windows on -Y, one on +X side
+    window_specs = [
+        (-1.4, -1.71, "front"),
+        ( 1.4, -1.71, "front"),
+        ( 2.21, 0.0,  "side"),
+    ]
+    for i, (wx, wy, facing) in enumerate(window_specs):
+        if facing == "front":
+            fscale = (0.78, 0.08, 0.78)
+            gscale = (0.6, 0.05, 0.6)
+            fz = 1.55
+            box_loc = (wx, wy - 0.12, 1.1)
+            box_scale = (0.85, 0.28, 0.18)
+        else:
+            fscale = (0.08, 0.78, 0.78)
+            gscale = (0.05, 0.6, 0.6)
+            fz = 1.55
+            box_loc = (wx + 0.12, wy, 1.1)
+            box_scale = (0.28, 0.85, 0.18)
 
+        # frame
+        bpy.ops.mesh.primitive_cube_add(size=1.0, location=(wx, wy, fz))
+        wf = bpy.context.active_object
+        wf.name = "house_winframe_%d" % i
+        wf.scale = fscale
+        wf.data.materials.append(frame_mat)
 
-# --- Ground ---
-bpy.ops.mesh.primitive_plane_add(size=30, location=(0, 0, 0))
-ground = bpy.context.active_object
-ground.name = "Ground"
-assign(ground, mat("Grass", (0.25, 0.55, 0.2, 1.0), roughness=0.9))
+        # glass pane (nudged slightly outward from the wall so it shows)
+        if facing == "front":
+            gloc = (wx, wy - 0.02, fz)
+        else:
+            gloc = (wx + 0.02, wy, fz)
+        bpy.ops.mesh.primitive_cube_add(size=1.0, location=gloc)
+        gp = bpy.context.active_object
+        gp.name = "house_glass_%d" % i
+        gp.scale = gscale
+        gp.data.materials.append(glass_mat)
 
-# --- Walls (a box) ---
-bpy.ops.mesh.primitive_cube_add(size=2, location=(0, 0, 1))
-walls = bpy.context.active_object
-walls.name = "Walls"
-walls.scale = (2.0, 1.6, 1.0)  # 4 x 3.2 x 2 m
-assign(walls, mat("WallCream", (0.92, 0.87, 0.72, 1.0)))
+        # flower box
+        bpy.ops.mesh.primitive_cube_add(size=1.0, location=box_loc)
+        fb = bpy.context.active_object
+        fb.name = "house_flowerbox_%d" % i
+        fb.scale = box_scale
+        fb.data.materials.append(box_mat)
 
-# --- Roof (a cone with 4 sides = pyramid) ---
-bpy.ops.mesh.primitive_cone_add(vertices=4, radius1=3.1, radius2=0,
-                                depth=1.8, location=(0, 0, 2.9))
-roof = bpy.context.active_object
-roof.name = "Roof"
-roof.rotation_euler = (0, 0, math.radians(45))
-assign(roof, mat("RoofRed", (0.6, 0.12, 0.1, 1.0), roughness=0.7))
+        # tiny blooms in the box
+        for j in range(5):
+            t = (j - 2) / 2.0  # -1..1
+            if facing == "front":
+                bx = wx + t * 0.36
+                by = wy - 0.22
+            else:
+                bx = wx + 0.22
+                by = wy + t * 0.36
+            bz = 1.24 + random.uniform(0.0, 0.05)
 
-# --- Door ---
-bpy.ops.mesh.primitive_cube_add(size=1, location=(0, -1.61, 0.7))
-door = bpy.context.active_object
-door.name = "Door"
-door.scale = (0.5, 0.05, 0.7)
-assign(door, mat("DoorWood", (0.35, 0.2, 0.08, 1.0), roughness=0.5))
+            # green stem stub
+            bpy.ops.mesh.primitive_cone_add(vertices=6, radius1=0.05, radius2=0.0,
+                                            depth=0.12, location=(bx, by, bz - 0.04))
+            st = bpy.context.active_object
+            st.name = "house_boxstem_%d_%d" % (i, j)
+            st.data.materials.append(leaf_mat)
 
-# --- Windows ---
-for i, x in enumerate((-1.2, 1.2)):
-    bpy.ops.mesh.primitive_cube_add(size=1, location=(x, -1.61, 1.2))
-    w = bpy.context.active_object
-    w.name = f"Window{i}"
-    w.scale = (0.45, 0.05, 0.45)
-    assign(w, mat("Glass", (0.55, 0.8, 0.95, 1.0), metallic=0.3, roughness=0.1))
+            # bloom
+            bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=1, radius=0.07,
+                                                  location=(bx, by, bz + 0.04))
+            bl = bpy.context.active_object
+            bl.name = "house_boxbloom_%d_%d" % (i, j)
+            for p in bl.data.polygons:
+                p.use_smooth = True
+            bl.data.materials.append(bloom_cols[(i + j) % len(bloom_cols)])
 
-# --- Chimney ---
-bpy.ops.mesh.primitive_cube_add(size=1, location=(1.2, 0.6, 3.2))
-chim = bpy.context.active_object
-chim.name = "Chimney"
-chim.scale = (0.35, 0.35, 0.9)
-assign(chim, mat("Brick", (0.5, 0.25, 0.2, 1.0), roughness=0.8))
+    # ---- Brick chimney (offset on roof, +X/+Y back side) ----
+    bpy.ops.mesh.primitive_cube_add(size=1.0, location=(1.2, 0.9, 3.6))
+    chim = bpy.context.active_object
+    chim.name = "house_chimney"
+    chim.scale = (0.5, 0.5, 1.6)
+    chim.data.materials.append(chim_mat)
 
-# --- A couple of low-poly trees ---
-def tree(x, y):
-    bpy.ops.mesh.primitive_cylinder_add(radius=0.15, depth=1.0, location=(x, y, 0.5))
-    trunk = bpy.context.active_object
-    assign(trunk, mat("Trunk", (0.3, 0.18, 0.08, 1.0)))
-    bpy.ops.mesh.primitive_cone_add(radius1=0.8, radius2=0, depth=1.8, location=(x, y, 1.8))
-    leaves = bpy.context.active_object
-    assign(leaves, mat("Leaves", (0.15, 0.45, 0.15, 1.0)))
+    bpy.ops.mesh.primitive_cube_add(size=1.0, location=(1.2, 0.9, 4.42))
+    cap = bpy.context.active_object
+    cap.name = "house_chimcap"
+    cap.scale = (0.62, 0.62, 0.18)
+    cap.data.materials.append(chimcap_mat)
 
-tree(-4.5, 2.0)
-tree(5.0, -1.5)
-
-# --- Lighting ---
-bpy.ops.object.light_add(type="SUN", location=(6, -6, 12))
-sun = bpy.context.active_object
-sun.data.energy = 3.5
-sun.rotation_euler = (math.radians(50), math.radians(10), math.radians(35))
-
-world = bpy.data.worlds.new("World")
-world.use_nodes = True
-world.node_tree.nodes["Background"].inputs["Color"].default_value = (0.5, 0.7, 0.95, 1.0)
-scene.world = world
-
-# --- Camera ---
-bpy.ops.object.camera_add(location=(9, -9, 6))
-cam = bpy.context.active_object
-cam.rotation_euler = (math.radians(65), 0, math.radians(45))
-scene.camera = cam
-
-# --- Render + save + export ---
-scene.render.engine = "BLENDER_EEVEE"
-scene.render.resolution_x = 1280
-scene.render.resolution_y = 720
-scene.render.filepath = os.path.join(OUT, "house_preview.png")
-print(">>> Rendering house...")
-bpy.ops.render.render(write_still=True)
-
-blend_path = os.path.join(OUT, "house.blend")
-bpy.ops.wm.save_as_mainfile(filepath=blend_path)
-print(f">>> Saved {blend_path}")
-
-bpy.ops.object.select_all(action="SELECT")
-glb_path = os.path.join(OUT, "house.glb")
-bpy.ops.export_scene.gltf(filepath=glb_path, export_format="GLB", use_selection=True)
-print(f">>> Exported {glb_path}")
-print(">>> DONE")
+    return body
